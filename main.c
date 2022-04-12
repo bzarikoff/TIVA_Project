@@ -160,7 +160,7 @@ void main(void)
 
     while(1)
     {
-       // uart_service();
+        uart_service();
         //dma_enable();
 
     }

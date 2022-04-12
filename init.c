@@ -99,6 +99,6 @@ void dma_init(void)
 global void initialization_routine()
 {
     gpio_init();
-   // dma_init();
+    //dma_init();
     uart_initialize();
 }

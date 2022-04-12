@@ -45,9 +45,9 @@ global void uart_configure(enum uart_channels uart_number)
     {
         // set drive strength to 8mA and enable variable slew rate
         gpio_regs = (struct gpio_regs *)GPIO_REGS_PORTD;
-        gpio_regs->gpio_8mA_drive |= (0x3 << 6);
-        gpio_regs->gpio_slew_rate |= (0x3 << 6);
-        gpio_regs->gpio_pull_up_select |= (0x3 << 6);
+        //gpio_regs->gpio_8mA_drive |= (0x3 << 6);
+        //gpio_regs->gpio_slew_rate |= (0x3 << 6);
+        //gpio_regs->gpio_pull_up_select |= (0x3 << 6);
         gpio_regs->gpio_digital_enable |= (0x3 << 6);
 
     }
@@ -66,10 +66,10 @@ global void uart_configure(enum uart_channels uart_number)
     //Set Baud Rate
     uart_regs[(int32)uart_number]->uart_int_baud_rate_divisor = BAUD_115200_INT;
     uart_regs[(int32)uart_number]->uart_fract_baud_rate_divisor = BAUD_115200_FRACT;
-    // Set DMA
-    uart_regs[(int32)uart_number]->uart_dma_control |= 0x3; //Enable Tx DMA and Rx DMA
     // Set data length, parity and stop bit. Enable FIFO buffers
     uart_regs[(int32)uart_number]->uart_line_control |= (EIGHT_BITS << BIT_LENGTH_SHIFT ) | (1 << FIFO_ENABLE_SHIFT );
+    // Set DMA
+    uart_regs[(int32)uart_number]->uart_dma_control |= 0x3; //Enable Tx DMA and Rx DMA
     //Enable UART
     uart_regs[(int32)uart_number]->uart_control |= 0x301; //enable UART, Tx, Rx enable
 
@@ -123,7 +123,7 @@ global void uart_service(void)
 //
 //    if(full)
 //        full = 1;
-    index = 0;
+  //  index = 0;
 
     switch(uart_state)
     {
@@ -134,6 +134,7 @@ global void uart_service(void)
                 uart_state = UART_RECEIVE;
                 index = 0;
                 receive[index] = HWREG(0x4000E000);
+                uart_regs[(int32)UART_TWO]->uart_data_register = receive[index];
                 index++;
 //                no_char = uart_regs[(int32)UART_TWO]->uart_flag;
 //                no_char = ((no_char >> UART_RECEIVED) & 0x1);
@@ -142,26 +143,40 @@ global void uart_service(void)
         }
         case UART_RECEIVE:
         {
-            while(!no_char)
+            if(!no_char)
             {
                 receive[index] = HWREG(0x4000E000);//uart_regs[(int32)UART_TWO]->uart_data_register
+                uart_regs[(int32)UART_TWO]->uart_data_register = receive[index];
+
+
+                if(receive[index] == 0x78)
+                {
+                    uart_state = UART_IDLE;
+                    index = 0;
+                    uart_regs[(int32)UART_TWO]->uart_data_register = 0x22;
+                }
+
                 index++;
 
-                no_char = uart_regs[(int32)UART_TWO]->uart_flag;
-                no_char = ((no_char >> UART_RECEIVED) & 0x1);
+
+                //no_char = uart_regs[(int32)UART_TWO]->uart_flag;
+                //no_char = ((no_char >> UART_RECEIVED) & 0x1);
 //                data_error = ((receive[index] >> 8 ) & 0xF);
 //                if(data_error > 0)
 //                    uart_state = UART_IDLE;
             }
-           // else
-                uart_state = UART_IDLE;
+//            else
+//            {
+//                uart_state = UART_IDLE;
 
 
-            if(index > 2)
-            {
-                index = 2;
-                uart_state = UART_IDLE;
-            }
+//            if(index > 2)
+//            {
+//                index = 2;
+//                uart_state = UART_IDLE;
+//            }
+//            index = 0;
+//            }
 
 
             break;
@@ -170,6 +185,13 @@ global void uart_service(void)
         {
             break;
         }
+
+        default:
+        {
+            uart_state = UART_IDLE;
+            index = 0;
+        }
+
     }
 
 
