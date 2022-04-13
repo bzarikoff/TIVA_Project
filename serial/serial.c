@@ -12,16 +12,66 @@
 static struct gpio_regs *gpio_regs;
 static struct uart_regs *uart_regs[(int16)MAX_UARTS];
 static enum uart_states uart_state;
-static volatile uint32 receive[5]; // first byte for message ID, second for parameter value
+static volatile uint32 receive[10]; // first byte for message ID, second for parameter value
 static volatile uint32 index;
 static uint32 data_error;
 static uint32 full;
-volatile uint32 test1, test2;
+volatile uint32 error_check, start_check;
+static uint32 store_size;
 
 // Memory-mapped UART registers
 //#pragma DATA_SECTION(uart_regs, ".uart")
 //global volatile struct uart_regs uart_regs;
 
+////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Local Functions
+//
+////////////////////////////////////////////////////////////////////////////////////////////
+
+local void test_function_store(void)
+{
+
+
+}
+
+const struct uart_store uart_store_array[] =
+{
+     {0x00,  NULL                },
+     {0x01,  NULL                },
+     {0x02,  &test_function_store},
+     {0x03,  NULL                },
+     {0x04,  NULL                },
+};
+
+
+
+//
+// Services receive message array
+//
+local void uart_message_array(void)
+{
+    int32 i;
+    for(i = 0; i < store_size; i++)
+    {
+        if(uart_store_array[i].uart_receive_id == receive[1])
+        {
+            uart_store_array[i].uart_store_function();
+        }
+    }
+
+
+}
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Global Functions
+//
+////////////////////////////////////////////////////////////////////////////////////////////
 
 //
 // Enables the run time clock gating for given uart channel
@@ -45,9 +95,9 @@ global void uart_configure(enum uart_channels uart_number)
     {
         // set drive strength to 8mA and enable variable slew rate
         gpio_regs = (struct gpio_regs *)GPIO_REGS_PORTD;
-        //gpio_regs->gpio_8mA_drive |= (0x3 << 6);
-        //gpio_regs->gpio_slew_rate |= (0x3 << 6);
-        //gpio_regs->gpio_pull_up_select |= (0x3 << 6);
+        gpio_regs->gpio_8mA_drive |= (0x3 << 6);
+        gpio_regs->gpio_slew_rate |= (0x3 << 6);
+        gpio_regs->gpio_pull_up_select |= (0x3 << 6);
         gpio_regs->gpio_digital_enable |= (0x3 << 6);
 
     }
@@ -76,6 +126,7 @@ global void uart_configure(enum uart_channels uart_number)
     uart_state = UART_IDLE;
     data_error = 0;
     full = 0;
+    store_size = sizeof( uart_store_array)/sizeof(uart_store_array[0]);
 }
 
 //
@@ -131,16 +182,32 @@ global void uart_service(void)
         {
             if(!no_char)
             {
-                uart_state = UART_RECEIVE;
+
                 index = 0;
-                receive[index] = HWREG(0x4000E000);
-                uart_regs[(int32)UART_TWO]->uart_data_register = receive[index];
-                index++;
-//                no_char = uart_regs[(int32)UART_TWO]->uart_flag;
-//                no_char = ((no_char >> UART_RECEIVED) & 0x1);
+                start_check = HWREG(0x4000E000);
+                uart_regs[(int32)UART_TWO]->uart_data_register = start_check;
+
+                if(start_check == UART_START)
+                {
+                    uart_state = UART_RECEIVE;
+                    receive[index] = start_check;
+                    index++;
+                }
+
+                // if error, discard message and clear error bits
+                error_check = (start_check & UART_DATA_ERROR_MASK);
+                if(error_check > 0)
+                {
+                    uart_state = UART_IDLE;
+                    index = 0;
+                    uart_regs[(int32)UART_TWO]->uart_receive_status_error_clear |= 0xF;
+                }
+
             }
             break;
         }
+
+
         case UART_RECEIVE:
         {
             if(!no_char)
@@ -149,40 +216,37 @@ global void uart_service(void)
                 uart_regs[(int32)UART_TWO]->uart_data_register = receive[index];
 
 
-                if(receive[index] == 0x78)
+                if(receive[index] == UART_STOP)
                 {
-                    uart_state = UART_IDLE;
+                    uart_state = UART_MESSAGE_RECEIVED;
                     index = 0;
                     uart_regs[(int32)UART_TWO]->uart_data_register = 0x22;
                 }
 
+                // if error, discard message and clear error bits
+                error_check = (receive[index] & UART_DATA_ERROR_MASK);
+                if(error_check > 0)
+                {
+                    uart_state = UART_IDLE;
+                    index = 0;
+                    uart_regs[(int32)UART_TWO]->uart_receive_status_error_clear |= 0xF;
+                }
+
                 index++;
-
-
-                //no_char = uart_regs[(int32)UART_TWO]->uart_flag;
-                //no_char = ((no_char >> UART_RECEIVED) & 0x1);
-//                data_error = ((receive[index] >> 8 ) & 0xF);
-//                if(data_error > 0)
-//                    uart_state = UART_IDLE;
             }
-//            else
-//            {
-//                uart_state = UART_IDLE;
-
-
-//            if(index > 2)
-//            {
-//                index = 2;
-//                uart_state = UART_IDLE;
-//            }
-//            index = 0;
-//            }
 
 
             break;
         }
         case UART_TRANSMIT:
         {
+            break;
+        }
+
+        case UART_MESSAGE_RECEIVED:
+        {
+
+            uart_message_array();
             break;
         }
 

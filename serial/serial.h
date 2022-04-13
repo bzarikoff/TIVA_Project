@@ -51,6 +51,19 @@
 #define UART_BUSY             3
 #define UART_RECEIVED         4
 
+// Uart ID Range, Stop Byte, Start Byte
+#define UART_STOP             0xFA
+#define UART_START            0xAF
+#define UART_ID_MAX           0x0A
+
+#define UART_DATA_ERROR_MASK 0xF00
+
+struct uart_store
+{
+    uint16 uart_receive_id; // type and ID for the value
+    void (*uart_store_function)(void);
+};
+
 enum uart_channels
 {
  UART_ZERO,
@@ -69,6 +82,7 @@ enum uart_states
     UART_IDLE,
     UART_RECEIVE,
     UART_TRANSMIT,
+    UART_MESSAGE_RECEIVED,
 };
 
 
