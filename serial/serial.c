@@ -8,11 +8,15 @@
 #include "serial/serial.h"
 #include "gpio/gpio.h"
 #include "aaaa.h"
+#include "application.h"
 
 static struct gpio_regs *gpio_regs;
 static struct uart_regs *uart_regs[(int16)MAX_UARTS];
 static enum uart_states uart_state;
-static volatile uint32 receive[10]; // first byte for message ID, second for parameter value
+
+// first byte for message ID, second for parameter value
+// 3, 4, 5, 6 are the value. Byte 7 is the stop byte.
+static volatile uint32 receive[10];
 static volatile uint32 index;
 static uint32 data_error;
 static uint32 full;
@@ -31,7 +35,15 @@ static uint32 store_size;
 
 local void test_function_store(void)
 {
+    //retrieve value sent from Pi
+    uint32 value_received = 0;
 
+    value_received |= (receive[2]<<(24));
+    value_received |= (receive[3]<<(16));
+    value_received |= (receive[4]<<(8));
+    value_received |= (receive[5]);
+
+    test_function_store_application(value_received);
 
 }
 
@@ -59,8 +71,6 @@ local void uart_message_array(void)
             uart_store_array[i].uart_store_function();
         }
     }
-
-
 }
 
 
@@ -185,7 +195,7 @@ global void uart_service(void)
 
                 index = 0;
                 start_check = HWREG(0x4000E000);
-                uart_regs[(int32)UART_TWO]->uart_data_register = start_check;
+                //uart_regs[(int32)UART_TWO]->uart_data_register = start_check;
 
                 if(start_check == UART_START)
                 {
@@ -213,7 +223,7 @@ global void uart_service(void)
             if(!no_char)
             {
                 receive[index] = HWREG(0x4000E000);//uart_regs[(int32)UART_TWO]->uart_data_register
-                uart_regs[(int32)UART_TWO]->uart_data_register = receive[index];
+                //uart_regs[(int32)UART_TWO]->uart_data_register = receive[index];
 
 
                 if(receive[index] == UART_STOP)
@@ -245,8 +255,9 @@ global void uart_service(void)
 
         case UART_MESSAGE_RECEIVED:
         {
-
             uart_message_array();
+            uart_state = UART_IDLE;
+            index = 0;
             break;
         }
 
