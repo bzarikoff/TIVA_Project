@@ -58,6 +58,14 @@
 
 #define UART_DATA_ERROR_MASK 0xF00
 
+// UART Interrupt Mask
+#define UART_IM_RXIM        0x4
+#define UART_IM_TXIM        0x5
+
+// UART Interrupts ENable
+#define INTERRUPTS_32_to_63  (uint32)0xE000E104
+
+
 struct uart_store
 {
     uint16 uart_receive_id; // type and ID for the value
@@ -129,6 +137,7 @@ struct uart_regs
 
 extern void uart_clock_enable(enum uart_channels uart_number);
 extern void uart_configure(enum uart_channels uart_number);
+extern void uart_configure_interrupts(enum uart_channels uart_number);
 extern void uart0_configure_for_test(enum uart_channels uart_number);
 extern void uart_service(void);
 

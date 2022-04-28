@@ -31,7 +31,7 @@ struct dma_regs
     uint32 dma_channel_useburst_set;
     uint32 dma_channel_useburst_clear;
     uint32 dma_channel_req_mask_set;
-    uint32 dma_channel_reg_mask_clear;
+    uint32 dma_channel_req_mask_clear;
     uint32 dma_channel_enable_set;
     uint32 dma_channel_enable_clear;
     uint32 dma_primary_alt_set;

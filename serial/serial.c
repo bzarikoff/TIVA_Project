@@ -96,6 +96,25 @@ global void uart_clock_enable(enum uart_channels uart_number)
 }
 
 //
+// Configures the uart for interrupts
+//
+global void uart_configure_interrupts(enum uart_channels uart_number)
+{
+    // Set interrupts levels on FIFOs
+    // Clears bits
+    uart_regs[(int32)uart_number]->uart_interrupt_fifo_select &= 0xC0;
+    // Sets Tx FIFO to 1/2 full and Rx FIFO to 1/2 full
+    uart_regs[(int32)uart_number]->uart_interrupt_fifo_select |= 0x12;
+
+    // Set interrupt mask
+    uart_regs[(int32)uart_number]->uart_interrupt_mask |= ((0x1 << UART_IM_RXIM) | (0x1 << UART_IM_TXIM));
+
+    // Enable interrupt for UART2 in the NVIC
+    uint32 *pointer = (uint32*)INTERRUPTS_32_to_63;
+    *pointer |= (1 << 1);
+}
+
+//
 // Configures the uart - only supports UART_TWO at this time
 //
 global void uart_configure(enum uart_channels uart_number)

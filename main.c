@@ -153,6 +153,7 @@ void main(void)
     uart_regs[(int32)UART_FIVE] = (struct uart_regs *)UART_FIVE_REGS_START_ADDR;
     uart_regs[(int32)UART_SIX] = (struct uart_regs *)UART_SIX_REGS_START_ADDR;
     uart_regs[(int32)UART_SEVEN] = (struct uart_regs *)UART_SEVEN_REGS_START_ADDR;
+
     initialization_routine();
 
 
@@ -160,8 +161,8 @@ void main(void)
 
     while(1)
     {
-        uart_service();
-        //dma_enable();
+        //uart_service();
+        dma_enable();
 
     }
 

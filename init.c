@@ -8,12 +8,13 @@
 #include "serial/serial.h"
 #include "aaaa.h"
 #include "gpio/gpio.h"
+#include "dma/dma.h"
 
 local const uint16 gpio_array[] =
 {
  // Port A
- GPIO_PA0_UART0_RX,
- GPIO_PA1_UART0_TX,
+ //GPIO_PA0_UART0_RX,
+ //GPIO_PA1_UART0_TX,
  //GPIO_PA2 is unused
  //GPIO_PA3 is unused
  //GPIO_PA4 is unused
@@ -72,6 +73,7 @@ void uart_initialize(void)
     uart_clock_enable(UART_TWO);
     uart_clock_enable(UART_ZERO);
     uart_configure(UART_TWO);
+    //uart_configure_interrupts(UART_TWO);
     uart0_configure_for_test(UART_ZERO);
 }
 
@@ -99,6 +101,6 @@ void dma_init(void)
 global void initialization_routine()
 {
     gpio_init();
-    //dma_init();
+    dma_init();
     uart_initialize();
 }
