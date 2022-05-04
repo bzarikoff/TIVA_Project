@@ -62,6 +62,6 @@ struct dma_regs
 
 extern void dma_clock_enable(void);
 extern void dma_initialize(void);
-extern void dma_enable(void);
+extern void dma_service(void);
 
 #endif /* DMA_H_ */

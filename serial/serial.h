@@ -69,7 +69,7 @@
 struct uart_store
 {
     uint16 uart_receive_id; // type and ID for the value
-    void (*uart_store_function)(void);
+    void (*uart_store_function)(uint32 arg);
 };
 
 enum uart_channels
@@ -140,6 +140,7 @@ extern void uart_configure(enum uart_channels uart_number);
 extern void uart_configure_interrupts(enum uart_channels uart_number);
 extern void uart0_configure_for_test(enum uart_channels uart_number);
 extern void uart_service(void);
+extern bool uart_rx_service(enum uart_channels uart_number, uint32 id, uint32 arg);
 
 
 #endif /* SERIAL_H_ */

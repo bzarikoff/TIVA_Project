@@ -11,7 +11,9 @@
 
 local uint32 test_value;
 
-
+//
+// Do something useful with value sent from dma
+//
 void test_function_store_application(uint32 value_received)
 {
     test_value = value_received;

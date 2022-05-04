@@ -19,7 +19,6 @@ static enum uart_states uart_state;
 static volatile uint32 receive[10];
 static volatile uint32 index;
 static uint32 data_error;
-static uint32 full;
 volatile uint32 error_check, start_check;
 static uint32 store_size;
 
@@ -33,22 +32,16 @@ static uint32 store_size;
 //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-local void test_function_store(void)
+local void test_function_store(uint32 arg)
 {
-    //retrieve value sent from Pi
-    uint32 value_received = 0;
 
-    value_received |= (receive[2]<<(24));
-    value_received |= (receive[3]<<(16));
-    value_received |= (receive[4]<<(8));
-    value_received |= (receive[5]);
-
-    test_function_store_application(value_received);
+    test_function_store_application(arg);
 
 }
 
 const struct uart_store uart_store_array[] =
 {
+     // Don't skip any ID so that indexes correspond to id number
      {0x00,  NULL                },
      {0x01,  NULL                },
      {0x02,  &test_function_store},
@@ -61,17 +54,17 @@ const struct uart_store uart_store_array[] =
 //
 // Services receive message array
 //
-local void uart_message_array(void)
-{
-    int32 i;
-    for(i = 0; i < store_size; i++)
-    {
-        if(uart_store_array[i].uart_receive_id == receive[1])
-        {
-            uart_store_array[i].uart_store_function();
-        }
-    }
-}
+//local void uart_message_array(void)
+//{
+//    int32 i;
+//    for(i = 0; i < store_size; i++)
+//    {
+//        if(uart_store_array[i].uart_receive_id == receive[1])
+//        {
+//            uart_store_array[i].uart_store_function();
+//        }
+//    }
+//}
 
 
 
@@ -104,7 +97,7 @@ global void uart_configure_interrupts(enum uart_channels uart_number)
     // Clears bits
     uart_regs[(int32)uart_number]->uart_interrupt_fifo_select &= 0xFFC0;
     // Sets Tx FIFO to 1/2 full and Rx FIFO to 1/2 full
-    uart_regs[(int32)uart_number]->uart_interrupt_fifo_select |= (0x2 | (2 << 3)); //0x12;
+    uart_regs[(int32)uart_number]->uart_interrupt_fifo_select |= (0x1 | (1 << 3)); //1 is 1/4, 2 is 1/2;
 
     // Set interrupt mask
     uart_regs[(int32)uart_number]->uart_interrupt_mask |= ((0x1 << UART_IM_RXIM) | (0x1 << UART_IM_TXIM));
@@ -157,7 +150,6 @@ global void uart_configure(enum uart_channels uart_number)
 
     uart_state = UART_IDLE;
     data_error = 0;
-    full = 0;
     store_size = sizeof( uart_store_array)/sizeof(uart_store_array[0]);
 }
 
@@ -193,112 +185,117 @@ global void uart0_configure_for_test(enum uart_channels uart_number)
 }
 
 //
-// Services the serial comms
+// Respond to message
 //
-global void uart_service(void)
+global bool uart_rx_service(enum uart_channels uart_number, uint32 id, uint32 arg)
 {
-//    uint32 busy = uart_regs[(int32)UART_TWO]->uart_flag;
-//    busy = ((busy >> UART_BUSY) & 0x1);
+    if((uart_regs[(int32)UART_TWO]->uart_receive_status_error_clear & 0xf) > 0)
+        return false;
 
-    uint32 no_char = uart_regs[(int32)UART_TWO]->uart_flag;
-    no_char = ((no_char >> UART_RECEIVED) & 0x1);
-//    full = ((no_char >> 6) & 0x1);
-//
-//    if(full)
-//        full = 1;
-  //  index = 0;
-
-    switch(uart_state)
-    {
-        case UART_IDLE:
-        {
-            if(!no_char)
-            {
-
-                index = 0;
-                start_check = HWREG(0x4000E000);
-                //uart_regs[(int32)UART_TWO]->uart_data_register = start_check;
-
-                if(start_check == UART_START)
-                {
-                    uart_state = UART_RECEIVE;
-                    receive[index] = start_check;
-                    index++;
-                }
-
-                // if error, discard message and clear error bits
-                error_check = (start_check & UART_DATA_ERROR_MASK);
-                if(error_check > 0)
-                {
-                    uart_state = UART_IDLE;
-                    index = 0;
-                    uart_regs[(int32)UART_TWO]->uart_receive_status_error_clear |= 0xF;
-                }
-
-            }
-            break;
-        }
+    if(uart_store_array[id].uart_receive_id == id)
+        uart_store_array[id].uart_store_function(arg);
+    else
+        return false;
 
 
-        case UART_RECEIVE:
-        {
-            if(!no_char)
-            {
-                receive[index] = HWREG(0x4000E000);//uart_regs[(int32)UART_TWO]->uart_data_register
-                //uart_regs[(int32)UART_TWO]->uart_data_register = receive[index];
+    return true;
 
 
-                if(receive[index] == UART_STOP)
-                {
-                    uart_state = UART_MESSAGE_RECEIVED;
-                    index = 0;
-                    uart_regs[(int32)UART_TWO]->uart_data_register = 0x22;
-                }
-
-                // if error, discard message and clear error bits
-                error_check = (receive[index] & UART_DATA_ERROR_MASK);
-                if(error_check > 0)
-                {
-                    uart_state = UART_IDLE;
-                    index = 0;
-                    uart_regs[(int32)UART_TWO]->uart_receive_status_error_clear |= 0xF;
-                }
-
-                index++;
-            }
-
-
-            break;
-        }
-        case UART_TRANSMIT:
-        {
-            break;
-        }
-
-        case UART_MESSAGE_RECEIVED:
-        {
-            uart_message_array();
-            uart_state = UART_IDLE;
-            index = 0;
-            break;
-        }
-
-        default:
-        {
-            uart_state = UART_IDLE;
-            index = 0;
-        }
-
-    }
-
-
-//    if(!busy)
-//    {
-//        //uart_regs[(int32)UART_TWO]->uart_data_register = 0x2c;
-//        uint32 *pointer = (uint32*)0x4000E000;
-//        *pointer |= 0x2c;
-//    }
 }
+
+//
+// Services the serial comms - this was pre DMA. Now unused
+//
+//global void uart_service(void)
+//{
+//
+//
+//    uint32 no_char = uart_regs[(int32)UART_TWO]->uart_flag;
+//    no_char = ((no_char >> UART_RECEIVED) & 0x1);
+//
+//    switch(uart_state)
+//    {
+//        case UART_IDLE:
+//        {
+//            if(!no_char)
+//            {
+//
+//                index = 0;
+//                start_check = HWREG(0x4000E000);
+//
+//                if(start_check == UART_START)
+//                {
+//                    uart_state = UART_RECEIVE;
+//                    receive[index] = start_check;
+//                    index++;
+//                }
+//
+//                // if error, discard message and clear error bits
+//                error_check = (start_check & UART_DATA_ERROR_MASK);
+//                if(error_check > 0)
+//                {
+//                    uart_state = UART_IDLE;
+//                    index = 0;
+//                    uart_regs[(int32)UART_TWO]->uart_receive_status_error_clear |= 0xF;
+//                }
+//
+//            }
+//            break;
+//        }
+//
+//
+//        case UART_RECEIVE:
+//        {
+//            if(!no_char)
+//            {
+//                receive[index] = HWREG(0x4000E000);//uart_regs[(int32)UART_TWO]->uart_data_register
+//                //uart_regs[(int32)UART_TWO]->uart_data_register = receive[index];
+//
+//
+//                if(receive[index] == UART_STOP)
+//                {
+//                    uart_state = UART_MESSAGE_RECEIVED;
+//                    index = 0;
+//                    uart_regs[(int32)UART_TWO]->uart_data_register = 0x22;
+//                }
+//
+//                // if error, discard message and clear error bits
+//                error_check = (receive[index] & UART_DATA_ERROR_MASK);
+//                if(error_check > 0)
+//                {
+//                    uart_state = UART_IDLE;
+//                    index = 0;
+//                    uart_regs[(int32)UART_TWO]->uart_receive_status_error_clear |= 0xF;
+//                }
+//
+//                index++;
+//            }
+//
+//
+//            break;
+//        }
+//        case UART_TRANSMIT:
+//        {
+//            break;
+//        }
+//
+//        case UART_MESSAGE_RECEIVED:
+//        {
+//            uart_message_array();
+//            uart_state = UART_IDLE;
+//            index = 0;
+//            break;
+//        }
+//
+//        default:
+//        {
+//            uart_state = UART_IDLE;
+//            index = 0;
+//        }
+//
+//    }
+//
+//}
 
 
 

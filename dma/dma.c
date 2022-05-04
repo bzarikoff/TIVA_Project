@@ -16,18 +16,9 @@ static uint8 TxBuffer[12];
 global uint32 dma_count;
 
 //
-// Enable clock for DMA
-//
-void dma_clock_enable(void)
-{
-    uint32 *clock = (uint32*)DMA_RUN_MODE_CLOCK_GATING_CONTROL_ADDRESS;
-    *clock |= 0x1;
-}
-
-//
 // Initializes dma channel control table
 //
-void dma_channel_control_table_init(void)
+local void dma_channel_control_table_init(void)
 {
 
     *(dma_regs->dma_channel_ctl_base_ptr + 0UL) = (uint32)UART_TWO_REGS_START_ADDR;// send back what it receives
@@ -61,23 +52,32 @@ void dma_channel_control_table_init(void)
     }
 
     // test a software DMA request
-    *(dma_regs->dma_channel_ctl_base_ptr + (6*4UL)) = &(RxBuffer[0]); //  Rx is source
-    *(dma_regs->dma_channel_ctl_base_ptr + (6*4UL + 1)) = &(TxBuffer[11]);; // Tx is destination
-    *(dma_regs->dma_channel_ctl_base_ptr + (6*4UL + 2)) = (uint32)(0x0C000002);//(uint32)(0xC0000002);
-    *(dma_regs->dma_channel_ctl_base_ptr + (6*4UL + 3)) = (uint32)(0x00000000);//(uint32)(0xC0000002);
-//    (RxBuffer[0]) = 0x12;
-//    (RxBuffer[1]) = 0x34;
-//    (RxBuffer[2]) = 0x56;
-//    (RxBuffer[3]) = 0x78;
-//    (RxBuffer[4]) = 0x91;
-    dma_count = 0UL;
+//    *(dma_regs->dma_channel_ctl_base_ptr + (6*4UL)) = &(RxBuffer[0]); //  Rx is source
+//    *(dma_regs->dma_channel_ctl_base_ptr + (6*4UL + 1)) = &(TxBuffer[11]);; // Tx is destination
+//    *(dma_regs->dma_channel_ctl_base_ptr + (6*4UL + 2)) = (uint32)(0x0C000002);//(uint32)(0xC0000002);
+//    *(dma_regs->dma_channel_ctl_base_ptr + (6*4UL + 3)) = (uint32)(0x00000000);//(uint32)(0xC0000002);
+//    dma_count = 0UL;
 
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//                Global Functions                                                              //
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+//
+// Enable clock for DMA
+//
+global void dma_clock_enable(void)
+{
+    uint32 *clock = (uint32*)DMA_RUN_MODE_CLOCK_GATING_CONTROL_ADDRESS;
+    *clock |= 0x1;
 }
 
 //
 // Initializes DMA
 //
-void dma_initialize(void)
+global void dma_initialize(void)
 {
     dma_regs = (struct dma_regs*)DMA_REGISTERS_BASE_ADDRESS;
     dma_regs->dma_config |= 0x1;
@@ -88,42 +88,75 @@ void dma_initialize(void)
    // dma_regs->dma_channel_enable_set |= (uint32)(1 << 6);
    // dma_regs->dma_channel_req_mask_set |= (uint32)0xFFBF;//(uint32)0xFFFC;//enables requests for only CH0 and CH1 and CH6(SW)
     dma_regs->dma_channel_req_mask_set |= (uint32)0xFFFE;
-    dma_regs->dma_channel_useburst_clear |= (uint32)0x1; //  burst
-
+    dma_regs->dma_channel_useburst_set |= (uint32)0x1; //  burst
 
     dma_channel_control_table_init();
 
     dma_regs->dma_channel_enable_set |= (uint32)0x1;//enables CH0 only for now (Rx)
-
-
-
 }
 
-global void dma_enable(void)
-{
-   // *(dma_regs->dma_channel_ctl_base_ptr + 26UL) |= (uint32)(0x2); //2 for CH0
-    //if(dma_regs->dma_channel_enable_set == 0x40)
 
+//
+//
+//
+global void dma_service(void)
+{
+
+    // if dma transfer complete, reset register and prepare for next transfer
     if((dma_regs->dma_channel_intr_status & 0x1) == 0x1)
     {
+        uint32 *pointer = UART_TWO_REGS_START_ADDR;
+        uint32 junk_data;
+        uint32 Rx_valid; // checks if dma is triggered due to Tx completion or Receive
+        bool success;
+
+        // Check if Rx buffer has characters
+        if(RxBuffer[6] != 0)
+        {
+            // Check if message framed correctly
+            if((RxBuffer[0] == 0xAF) && (RxBuffer[6] == 0xFA))
+            {
+                // format data for uart
+                uint32 id = RxBuffer[1];
+                uint32 arg = 0;
+                arg =  (RxBuffer[2] << 24) | (RxBuffer[3] << 16) | (RxBuffer[4] << 8) | RxBuffer[5];
+                success = uart_rx_service(UART_TWO, id, arg);
+            }
+
+            //data is incorrect - flush Rx uart
+            else
+            {
+                junk_data = *pointer;
+
+                while(junk_data!=0)
+                    junk_data = *pointer;
+            }
+
+            uint16 index = 0;
+            // clear receive buffer
+            while(index < 7)
+            {
+                RxBuffer[index] = 0;
+                index++;
+            }
+
+        }
+
+
+        // rearm DMA
         dma_count++;
-        uint32 *pointer = 0x4000E000;
-        *(pointer) = 0xff;
+        if(success)
+            *(pointer) = 0xff; // send acknowledge (success)
+        else
+            *(pointer) = 0xee; // send acknowledge (error)
+
         *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(0x1); //2 for CH0 0x2 for auto, 1 for basic
         dma_regs->dma_channel_enable_set |= (uint32)0x41;//enables CH0 only for now (Rx)
-        dma_regs->dma_channel_useburst_clear |= (uint32)0x1; // burst
+        dma_regs->dma_channel_useburst_set |= (uint32)0x1; // burst
         dma_regs->dma_channel_intr_status |= 0x1;
         *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(6UL << 4); // transfer size is 7
-
-        //pointer = 0x20002004;
-        //*pointer += 0x4;
     }
 
-   // if((dma_regs->dma_channel_intr_status & 0x1) == 0x1)
-   //     dma_regs->dma_channel_intr_status |= 0x1;
 
-
-    //dma_regs->dma_software_req |= (1 << 6); // sw request for channel 6
-    //dma_regs->dma_channel_req_mask_set |= (1 << 6); // disables mask - now only does sw
 
 }
