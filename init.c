@@ -73,8 +73,8 @@ void uart_initialize(void)
     uart_clock_enable(UART_TWO);
     uart_clock_enable(UART_ZERO);
     uart_configure(UART_TWO);
-    //uart_configure_interrupts(UART_TWO);
-    uart0_configure_for_test(UART_ZERO);
+    uart_configure_interrupts(UART_TWO);
+    //uart0_configure_for_test(UART_ZERO);
 }
 
 //
