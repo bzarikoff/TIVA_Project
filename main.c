@@ -41,43 +41,6 @@ void UART2_ISR(void)
 }
 
 
-//
-// initialize timer used for main loop
-//
-local void timer_init(void)
-{
-
-    uint32 *pointer = SYSTICK_CONTROL_AND_STATUS;
-    *(pointer + 1) = 0x00FFFFFF; // put max value in for reload register
-    *pointer |= (0x1 | (1 << 2)); // enable timer, uses system clock
-}
-
-//
-// read cpu timer value
-//
-local int32 cpu_timer_value(void)
-{
-    uint32 *pointer = SYSTICK_CURRENT_VAL;
-    return (*pointer & 0x00FFFFFF);
-}
-
-//
-// Expiry limit check
-//
-local int32 cpu_expiry_time(int32 cpu_timer, uint32 period)
-{
-    int32 diff = cpu_timer - period;
-
-    if(diff < 0)
-        return 0x00FFFFFC;
-
-    else
-        return diff;
-
-}
-
-
-
 void main(void)
 {
 

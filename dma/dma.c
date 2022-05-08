@@ -151,9 +151,9 @@ global void dma_service(void)
             *(pointer) = 0xee; // send acknowledge (error)
 
         *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(0x1); //2 for CH0 0x2 for auto, 1 for basic
-        dma_regs->dma_channel_enable_set |= (uint32)0x41;//enables CH0 only for now (Rx)
         dma_regs->dma_channel_useburst_set |= (uint32)0x1; // burst
-        dma_regs->dma_channel_intr_status |= 0x1;
+        dma_regs->dma_channel_intr_status |= 0x1; // clear transfer complete
+        dma_regs->dma_channel_enable_set |= (uint32)0x41;//renables CH0 only for now (Rx)
         *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(6UL << 4); // transfer size is 7
     }
 

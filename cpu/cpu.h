@@ -33,6 +33,8 @@
 //
 //#define cpu_microseconds() ((int32)REGISTER_32(0xE000E018) )//& 0x00FFFFFF)
 
-
+extern void timer_init(void);
+extern int32 cpu_timer_value(void);
+extern int32 cpu_expiry_time(int32 cpu_timer, uint32 period);
 
 #endif /* CPU_H_ */
