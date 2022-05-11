@@ -22,6 +22,8 @@ static uint32 data_error;
 volatile uint32 error_check, start_check;
 static uint32 store_size;
 
+local uint32 count;
+
 // Memory-mapped UART registers
 //#pragma DATA_SECTION(uart_regs, ".uart")
 //global volatile struct uart_regs uart_regs;
@@ -39,13 +41,28 @@ local void test_function_store(uint32 arg)
 
 }
 
+//
+// updates PI data when requested
+//
+local void send_data_to_PI(uint32 arg)
+{
+    uart_regs[UART_TWO]->uart_data_register = 0xAF;
+    uart_regs[UART_TWO]->uart_data_register = 0x02;
+    uart_regs[UART_TWO]->uart_data_register = (count >> 24) & 0xFF;
+    uart_regs[UART_TWO]->uart_data_register = (count >> 16) & 0xFF;
+    uart_regs[UART_TWO]->uart_data_register = (count >> 8) & 0xFF;
+    uart_regs[UART_TWO]->uart_data_register = count & 0xFF;
+    count++;
+    uart_regs[UART_TWO]->uart_data_register = 0xFA;
+}
+
 const struct uart_store uart_store_array[] =
 {
      // Don't skip any ID so that indexes correspond to id number
      {0x00,  NULL                },
      {0x01,  NULL                },
      {0x02,  &test_function_store},
-     {0x03,  NULL                },
+     {0x03,  &send_data_to_PI    },
      {0x04,  NULL                },
 };
 
@@ -149,6 +166,7 @@ global void uart_configure(enum uart_channels uart_number)
     //uart_regs[(int32)uart_number]->uart_interrupt_fifo_select |= (0x1 | (0x1 << 3));//(0x2 | (0x2 << 3));
 
     uart_state = UART_IDLE;
+    count = 0UL;
     data_error = 0;
     store_size = sizeof( uart_store_array)/sizeof(uart_store_array[0]);
 }

@@ -10,10 +10,13 @@
 
 static struct dma_channel_control *dma_chan_ctrl;
 static struct dma_regs *dma_regs;
+static struct uart_regs *uart_regs;
 static uint32 *channel_control_table;
 static uint32 RxBuffer[12];
 static uint8 TxBuffer[12];
 global uint32 dma_count;
+global uint32 Test[12];
+global sucess_counter;
 
 //
 // Initializes dma channel control table
@@ -80,8 +83,9 @@ global void dma_clock_enable(void)
 global void dma_initialize(void)
 {
     dma_regs = (struct dma_regs*)DMA_REGISTERS_BASE_ADDRESS;
+    uart_regs = (struct uart_regs*)UART_TWO_REGS_START_ADDR;
     dma_regs->dma_config |= 0x1;
-    dma_regs->dma_channel_map_select_0 = ((0x1) | (0x1 << 4)); // Channel 0 UART2 Rx, Channel 1 UART2 Tx
+    dma_regs->dma_channel_map_select_0 = ((0x1));// | (0x1 << 4)); // Channel 0 UART2 Rx, Channel 1 UART2 Tx
     dma_regs->dma_channel_ctl_base_ptr = (uint32*)0x20002000;
     dma_regs->dma_channel_priority_set |= (uint32)0x1;
     dma_regs->dma_primary_alt_clear |= (uint32)((1 << 6)|| 0x1);
@@ -92,12 +96,14 @@ global void dma_initialize(void)
 
     dma_channel_control_table_init();
 
+    sucess_counter = 0UL;
+
     dma_regs->dma_channel_enable_set |= (uint32)0x1;//enables CH0 only for now (Rx)
 }
 
 
 //
-//
+// Service DMA
 //
 global void dma_service(void)
 {
@@ -111,7 +117,8 @@ global void dma_service(void)
         bool success;
 
         // Check if Rx buffer has characters
-        if(RxBuffer[6] != 0)
+        if((RxBuffer[6] != 0) |(RxBuffer[5] != 0) | (RxBuffer[4] != 0) | (RxBuffer[3] != 0)
+                | (RxBuffer[2] != 0) | (RxBuffer[1] != 0) | (RxBuffer[0] != 0))
         {
             // Check if message framed correctly
             if((RxBuffer[0] == 0xAF) && (RxBuffer[6] == 0xFA))
@@ -121,40 +128,77 @@ global void dma_service(void)
                 uint32 arg = 0;
                 arg =  (RxBuffer[2] << 24) | (RxBuffer[3] << 16) | (RxBuffer[4] << 8) | RxBuffer[5];
                 success = uart_rx_service(UART_TWO, id, arg);
+                sucess_counter++;
+                *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(6UL << 4); // transfer size is 7
+                dma_regs->dma_channel_useburst_set |= (uint32)0x1; // burst
             }
 
             //data is incorrect - flush Rx uart
             else
             {
+                uint16 i = 0u;
                 junk_data = *pointer;
 
-                while(junk_data!=0)
-                    junk_data = *pointer;
+                if(RxBuffer[6] == 0xFA)
+                    *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(6UL << 4); // transfer size is 7
+                else
+                    *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(0UL << 4); // transfer size is 1 until message is
+                // format is rebased
+
+                // need to clear all 16 characters of FIFO
+                //while(i<16)
+//                while(junk_data != 0x00)
+//                {
+//                    junk_data = *pointer;
+//                    i++;
+//                }
+//                // Disable UART
+//                uart_regs->uart_control &= 0xFFFFFFFE;
+//
+//                uart_regs->uart_line_control &=  ~(1 << FIFO_ENABLE_SHIFT );
+//                uart_regs->uart_line_control |=  (1 << FIFO_ENABLE_SHIFT );
+//
+//                //Enable UART
+//                uart_regs->uart_control |= 0x301; //enable UART, Tx, Rx enable
+
+                success = false;
+
+                // Clear DMA on any bad data
+//                while((dma_regs->dma_channel_intr_status & 0x1) == 0x1)
+//                {
+//                    dma_regs->dma_channel_intr_status |= 0x1; // clear transfer complete
+//                   //*(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(0UL << 4); // transfer size is 7
+//                   dma_regs->dma_channel_enable_set |= (uint32)0x01;//renables CH0 only for now (Rx) //40 is software test
+//                }
+//                dma_regs->dma_channel_enable_set &= ~(uint32)0x01;//renables CH0 only for now (Rx) //40 is software test
             }
 
             uint16 index = 0;
             // clear receive buffer
             while(index < 7)
             {
+                Test[index] = RxBuffer[index];
                 RxBuffer[index] = 0;
                 index++;
             }
+
+
 
         }
 
 
         // rearm DMA
         dma_count++;
-        if(success)
-            *(pointer) = 0xff; // send acknowledge (success)
-        else
-            *(pointer) = 0xee; // send acknowledge (error)
+//        if(success)
+//            HWREG(pointer) = 0xff; // send acknowledge (success)
+//        else
+//            HWREG(pointer) = 0xee; // send acknowledge (error)
 
         *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(0x1); //2 for CH0 0x2 for auto, 1 for basic
-        dma_regs->dma_channel_useburst_set |= (uint32)0x1; // burst
+        //dma_regs->dma_channel_useburst_set |= (uint32)0x1; // burst
         dma_regs->dma_channel_intr_status |= 0x1; // clear transfer complete
-        dma_regs->dma_channel_enable_set |= (uint32)0x41;//renables CH0 only for now (Rx)
-        *(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(6UL << 4); // transfer size is 7
+        //*(dma_regs->dma_channel_ctl_base_ptr + 2UL) |= (uint32)(6UL << 4); // transfer size is 7
+        dma_regs->dma_channel_enable_set |= (uint32)0x01;//renables CH0 only for now (Rx) //40 is software test
     }
 
 
